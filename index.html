@@ -1,35 +1,306 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#111827">
-  <title>Escáner de Acceso</title>
-  <style>
-    *{box-sizing:border-box}
-    body{margin:0;font-family:Arial,sans-serif;background:#111827;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-    .card{width:min(520px,100%);background:#fff;color:#111827;border-radius:18px;padding:28px;box-shadow:0 15px 45px rgba(0,0,0,.28);text-align:center}
-    h1{margin:0 0 10px;font-size:28px}
-    p{line-height:1.5;color:#475467}
-    .btn{display:block;width:100%;padding:16px;margin-top:20px;border:0;border-radius:10px;background:#111827;color:#fff;font-size:17px;font-weight:700;text-decoration:none;cursor:pointer}
-    .note{font-size:13px;margin-top:16px}
-    .spinner{width:34px;height:34px;border:4px solid #e5e7eb;border-top-color:#111827;border-radius:50%;margin:20px auto;animation:g 1s linear infinite}
-    @keyframes g{to{transform:rotate(360deg)}}
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<title>Escáner de Acceso</title>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<style>
+body{
+  margin:0;
+  background:#101827;
+  color:#fff;
+  font-family:Arial,sans-serif;
+}
+
+.wrap{
+  max-width:620px;
+  margin:auto;
+  padding:18px;
+}
+
+.card{
+  background:#fff;
+  color:#17202a;
+  border-radius:18px;
+  padding:18px;
+  box-shadow:0 10px 30px #0005;
+}
+
+h1{
+  font-size:24px;
+  margin:0 0 8px;
+  text-align:center;
+}
+
+.small{
+  color:#65717e;
+  font-size:13px;
+  margin-bottom:14px;
+  text-align:center;
+}
+
+#reader{
+  width:100%;
+  max-width:560px;
+  margin:auto;
+}
+
+.result{
+  margin-top:14px;
+  padding:15px;
+  border-radius:12px;
+  font-weight:700;
+  background:#eef2f5;
+  text-align:center;
+}
+
+.ok{
+  background:#dff5e4;
+  color:#145c2a;
+}
+
+.bad{
+  background:#ffe0e0;
+  color:#8a1515;
+}
+
+.busy{
+  background:#fff4c2;
+  color:#5b4800;
+}
+</style>
 </head>
+
 <body>
-  <main class="card">
-    <div class="spinner" aria-hidden="true"></div>
+
+<div class="wrap">
+
+  <div class="card">
+
     <h1>ESCÁNER DE ACCESO</h1>
-    <p>Abriendo el escáner oficial del evento...</p>
-    <a class="btn" href="https://script.google.com/macros/s/AKfycbzGEu4dyhLJlj21sLxelVucV7eSW6dI1ALSGVOl6vqQGCqK5yv2MGCopdNb9hFdmpHo/exec?page=scanner">ABRIR ESCÁNER</a>
-    <p class="note">Si la apertura automática no funciona, pulsa el botón.</p>
-  </main>
-  <script>
-    const scannerUrl = 'https://script.google.com/macros/s/AKfycbzGEu4dyhLJlj21sLxelVucV7eSW6dI1ALSGVOl6vqQGCqK5yv2MGCopdNb9hFdmpHo/exec' + "?page=scanner";
-    setTimeout(() => {
-      window.location.replace(scannerUrl);
-    }, 700);
-  </script>
+
+    <div class="small">
+      Público. No requiere usuario.<br>
+      Apunte la cámara al código QR del asistente.
+    </div>
+
+    <div id="reader"></div>
+
+    <div id="result" class="result">
+      APUNTE LA CÁMARA AL QR DEL ASISTENTE.
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+
+/* =========================================
+   URL DE TU GOOGLE APPS SCRIPT
+   ========================================= */
+
+const API_URL =
+'https://script.google.com/macros/s/AKfycbwR1dK3f4gLgzIHbK2Y_HCU7CFnadUZONKXg9h5pEi6jv67sQ7NtW2Qj-ntd1RVN-7z/exec';
+
+
+let locked = false;
+
+
+/* =========================================
+   MOSTRAR RESULTADO
+   ========================================= */
+
+function result(text, cls){
+
+  const e = document.getElementById('result');
+
+  e.textContent = text;
+
+  e.className = 'result ' + (cls || '');
+
+}
+
+
+/* =========================================
+   EXTRAER TOKEN DEL QR
+   ========================================= */
+
+function extractToken(text){
+
+  try{
+
+    const u = new URL(text);
+
+    const t = u.searchParams.get('token');
+
+    if(t) return t;
+
+  }catch(e){}
+
+  return text.trim();
+
+}
+
+
+/* =========================================
+   COMUNICACIÓN CON GOOGLE APPS SCRIPT
+   ========================================= */
+
+function jsonp(url, cb){
+
+  const s = document.createElement('script');
+
+  const name =
+    'cb_' +
+    Date.now() +
+    '_' +
+    Math.floor(Math.random()*10000);
+
+  window[name] = function(data){
+
+    delete window[name];
+
+    s.remove();
+
+    cb(data);
+
+  };
+
+  s.src =
+    url +
+    (url.includes('?') ? '&' : '?') +
+    'prefix=' +
+    encodeURIComponent(name);
+
+  s.onerror = function(){
+
+    delete window[name];
+
+    s.remove();
+
+    cb({
+      ok:false,
+      message:'NO SE PUDO COMUNICAR CON EL SERVIDOR.'
+    });
+
+  };
+
+  document.body.appendChild(s);
+
+}
+
+
+/* =========================================
+   PROCESAR QR
+   ========================================= */
+
+function processScan(decoded){
+
+  if(locked) return;
+
+  locked = true;
+
+  const token = extractToken(decoded);
+
+  if(!token){
+
+    locked = false;
+
+    return;
+
+  }
+
+
+  result(
+    'VALIDANDO QR...',
+    'busy'
+  );
+
+
+  jsonp(
+    API_URL +
+    '?api=scan&token=' +
+    encodeURIComponent(token),
+
+    data => {
+
+      if(data.ok){
+
+        if(data.already){
+
+          result(
+            'YA HABÍA INGRESADO: ' +
+            (data.nombre || data.id || ''),
+            'ok'
+          );
+
+        }else{
+
+          result(
+            'INGRESO REGISTRADO: ' +
+            (data.nombre || data.id || ''),
+            'ok'
+          );
+
+        }
+
+      }else{
+
+        result(
+          data.message ||
+          'QR NO VÁLIDO',
+          'bad'
+        );
+
+      }
+
+
+      setTimeout(
+        () => {
+
+          locked = false;
+
+          result(
+            'APUNTE LA CÁMARA AL SIGUIENTE QR.'
+          );
+
+        },
+        2500
+      );
+
+    }
+  );
+
+}
+
+
+/* =========================================
+   INICIAR ESCÁNER
+   ========================================= */
+
+const scanner =
+  new Html5QrcodeScanner(
+    'reader',
+    {
+      fps:10,
+      qrbox:{
+        width:250,
+        height:250
+      },
+      rememberLastUsedCamera:true
+    },
+    false
+  );
+
+
+scanner.render(processScan);
+
+</script>
+
 </body>
 </html>
